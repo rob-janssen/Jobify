@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { JOB_STATUS, JOB_TYPE } from "../utils/constants.js";
 
 import Job from "../models/JobModel.js";
+import User from "../models/UserModel.js";
 
 const withValidationErrors = (validateValues) => {
   return [
@@ -12,6 +13,9 @@ const withValidationErrors = (validateValues) => {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         const errorMessages = errors.array().map((error) => error.msg);
+        if (errorMessages[0].startsWith("No job")) {
+          throw new NotFoundError(errorMessages);
+        }
         throw new BadRequestError(errorMessages);
       }
       next();
@@ -40,4 +44,35 @@ export const validateIdParam = withValidationErrors([
 
     if (!isValidId) throw new BadRequestError("Invalid MongoDB id");
   }),
+]);
+
+export const validateRegisterInput = withValidationErrors([
+  body("name").notEmpty().withMessage("Name is required"),
+  body("email")
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email format")
+    .custom(async (email) => {
+      const user = await User.findOne({ email });
+      if (user) {
+        throw new BadRequestError("email already exists");
+      }
+    }),
+  body("password")
+    .notEmpty()
+    .withMessage("You need to provide a password")
+    .isLength({ min: 8 })
+    .withMessage("Password must be at least 8 characters long"),
+  body("lastName").notEmpty().withMessage("Last name is required"),
+  body("location").notEmpty().withMessage("Location is required"),
+]);
+
+export const validateLoginInput = withValidationErrors([
+  body("email")
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email format"),
+  body("password").notEmpty().withMessage("You need to provide a password"),
 ]);
