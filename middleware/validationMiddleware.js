@@ -1,5 +1,9 @@
 import { body, param, validationResult } from "express-validator";
-import { BadRequestError, NotFoundError } from "../errors/customErrors.js";
+import {
+  BadRequestError,
+  NotFoundError,
+  UnauthorizedError,
+} from "../errors/customErrors.js";
 import mongoose from "mongoose";
 import { JOB_STATUS, JOB_TYPE } from "../utils/constants.js";
 
@@ -15,6 +19,9 @@ const withValidationErrors = (validateValues) => {
         const errorMessages = errors.array().map((error) => error.msg);
         if (errorMessages[0].startsWith("No job")) {
           throw new NotFoundError(errorMessages);
+        }
+        if (errorMessages[0].startsWith("Not authorized")) {
+          throw new UnauthorizedError("Not authorized to access");
         }
         throw new BadRequestError(errorMessages);
       }
@@ -36,13 +43,16 @@ export const validateJobInput = withValidationErrors([
 ]);
 
 export const validateIdParam = withValidationErrors([
-  param("id").custom(async (value) => {
-    const isValidId = mongoose.Types.ObjectId.isValid(value);
-    if (!isValidId) throw new BadRequestError("Invalid MongoDB ID");
+  param("id").custom(async (value, { req }) => {
+    const isValidMongoId = mongoose.Types.ObjectId.isValid(value);
+    if (!isValidMongoId) throw new BadRequestError("invalid MongoDB id");
     const job = await Job.findById(value);
-    if (!job) throw new NotFoundError(`No job found with id ${value}.`);
+    if (!job) throw new NotFoundError(`no job with id ${value}`);
+    const isAdmin = req.user.role === "admin";
+    const isOwner = req.user.userId === job.createdBy.toString();
 
-    if (!isValidId) throw new BadRequestError("Invalid MongoDB id");
+    if (!isAdmin && !isOwner)
+      throw new UnauthorizedError("not authorized to access this route");
   }),
 ]);
 
@@ -75,4 +85,21 @@ export const validateLoginInput = withValidationErrors([
     .isEmail()
     .withMessage("Invalid email format"),
   body("password").notEmpty().withMessage("You need to provide a password"),
+]);
+
+export const validateUpdateUserInput = withValidationErrors([
+  body("name").notEmpty().withMessage("Name is required"),
+  body("email")
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email format")
+    .custom(async (email) => {
+      const user = await User.findOne({ email });
+      if (user && user._id.toString() !== req.user.userId) {
+        throw new BadRequestError("email already exists");
+      }
+    }),
+  body("lastName").notEmpty().withMessage("Last name is required"),
+  body("location").notEmpty().withMessage("Location is required"),
 ]);
