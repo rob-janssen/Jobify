@@ -8,7 +8,7 @@ const ThemeToggle = () => {
   return (
     <Wrapper onClick={toggleDarkTheme}>
       {isDarkTheme ? (
-        <BsFillSunFill classname="toggle-icon" />
+        <BsFillSunFill className="toggle-icon" />
       ) : (
         <BsFillMoonFill />
       )}
